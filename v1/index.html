@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1f2937">
+  <title>יאצי — Yatzi</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar__title">יאצי</h1>
+    <div class="topbar__right">
+      <button type="button" class="lang-toggle" id="lang-toggle" aria-label="Switch language">EN</button>
+    </div>
+  </header>
+
+  <main class="screens">
+    <section class="screen screen--menu" id="screen-menu" data-screen="menu"></section>
+    <section class="screen screen--board" id="screen-board" data-screen="board" hidden></section>
+    <section class="screen screen--end" id="screen-end" data-screen="end" hidden></section>
+  </main>
+
+  <!-- Engine + shared (UMD globals attach to window.Yatzi) -->
+  <script src="../engine/dice.js"></script>
+  <script src="../engine/scoring.js"></script>
+  <script src="../engine/state.js"></script>
+  <script src="../engine/rules.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="../shared/format.js"></script>
+
+  <!-- v1 UI modules -->
+  <script src="store/persist.js"></script>
+  <script src="ui/dice.js"></script>
+  <script src="ui/board.js"></script>
+  <script src="ui/menu.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

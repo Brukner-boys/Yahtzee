@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/tbrukner/.claude/projects/-Users-tbrukner-projects-Yatzi/memory)",
+      "Bash(mkdir -p /Users/tbrukner/projects/Yatzi/engine /Users/tbrukner/projects/Yatzi/shared /Users/tbrukner/projects/Yatzi/engine/tests)",
+      "Bash(node --test engine/tests/*.test.js)",
+      "Bash(node /Users/tbrukner/projects/Yatzi/v2/server/smoke-ws.js)",
+      "Bash(curl -s -o /dev/null -w \"v1 root: %{http_code}\\\\n\" http://127.0.0.1:8080/v1/)",
+      "Bash(curl -s -o /dev/null -w \"v1 style: %{http_code}\\\\n\" http://127.0.0.1:8080/v1/style.css)",
+      "Bash(curl -s -o /dev/null -w \"v2 client style: %{http_code}\\\\n\" http://127.0.0.1:8080/style.css)",
+      "Bash(curl -s -o /dev/null -w \"v1-ui board: %{http_code}\\\\n\" http://127.0.0.1:8080/v1-ui/board.js)",
+      "Bash(curl -s -o /dev/null -w \"shared i18n: %{http_code}\\\\n\" http://127.0.0.1:8080/shared/i18n.js)"
+    ]
+  }
+}

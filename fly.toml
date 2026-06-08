@@ -1,0 +1,33 @@
+# fly.io configuration for Yatzi server.
+# Generated with `fly launch` and customized.
+# Run `fly deploy` to push the current state of the repo.
+
+# app name will be set by `fly launch` on first deploy. Once set, do not change.
+# app = "yatzi-something"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  TRUST_PROXY = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

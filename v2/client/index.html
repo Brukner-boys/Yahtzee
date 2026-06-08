@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1f2937">
+  <title>יאצי — Yatzi (Online)</title>
+  <link rel="stylesheet" href="/v1/style.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar__title">יאצי</h1>
+    <div class="topbar__right">
+      <span id="conn" class="conn-indicator" data-status="connecting" aria-live="polite">…</span>
+      <button type="button" class="lang-toggle" id="lang-toggle" aria-label="Switch language">EN</button>
+    </div>
+  </header>
+
+  <main class="screens">
+    <section class="screen" id="screen-lobby" data-screen="lobby"></section>
+    <section class="screen" id="screen-room" data-screen="room" hidden></section>
+    <section class="screen screen--board" id="screen-board" data-screen="board" hidden></section>
+    <section class="screen screen--end" id="screen-end" data-screen="end" hidden></section>
+  </main>
+
+  <!-- Engine + shared (UMD globals attach to window.Yatzi) -->
+  <script src="/engine/dice.js"></script>
+  <script src="/engine/scoring.js"></script>
+  <script src="/engine/state.js"></script>
+  <script src="/engine/rules.js"></script>
+  <script src="/shared/i18n.js"></script>
+  <script src="/shared/format.js"></script>
+
+  <!-- Reuse v1 board renderer -->
+  <script src="/v1-ui/board.js"></script>
+
+  <!-- v2 modules -->
+  <script src="/store/session.js"></script>
+  <script src="/net/socket.js"></script>
+  <script src="/ui/lobby.js"></script>
+  <script src="/ui/room.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
