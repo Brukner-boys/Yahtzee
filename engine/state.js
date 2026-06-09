@@ -46,9 +46,12 @@
       turnNumber: 1,
       playerTurnCounts: players.map(() => 0),
       playerFinishedAt: players.map(() => null),
+      firstFinisherIndex: null,
+      finalRoundRemaining: null,    // null = not in final round; array of player ids yet to play
       gameOver: false,
       winner: null,
       lastEvent: null,
+      eventSeq: 0,
     };
   }
 
@@ -64,9 +67,12 @@
       turnNumber: s.turnNumber,
       playerTurnCounts: s.playerTurnCounts.slice(),
       playerFinishedAt: s.playerFinishedAt.slice(),
+      firstFinisherIndex: s.firstFinisherIndex,
+      finalRoundRemaining: s.finalRoundRemaining ? s.finalRoundRemaining.slice() : null,
       gameOver: s.gameOver,
       winner: s.winner,
       lastEvent: s.lastEvent,
+      eventSeq: s.eventSeq || 0,
     };
   }
 
@@ -100,6 +106,7 @@
   function applyMove(state, move) {
     const s = cloneState(state);
     if (s.gameOver) throw new Error('game is over');
+    s.eventSeq = (s.eventSeq || 0) + 1;
 
     if (move.type === 'roll') {
       if (s.rollsTaken >= MAX_ROLLS_PER_TURN) {
@@ -115,13 +122,16 @@
       }
       if (s.rollsTaken === 0) {
         s.dice = move.dice.slice();
-        s.holds = [false, false, false, false, false];
+        // INVERTED UX: default after a roll is "all dice kept", click to mark for reroll.
+        s.holds = [true, true, true, true, true];
       } else {
         const next = s.dice.slice();
         for (let i = 0; i < DICE_COUNT; i++) {
           if (!s.holds[i]) next[i] = move.dice[i];
         }
         s.dice = next;
+        // After a reroll, re-set everything to "kept" so the player can pick a new reroll set.
+        s.holds = [true, true, true, true, true];
       }
       s.rollsTaken++;
       s.lastEvent = { type: 'rolled', rollsTaken: s.rollsTaken };
@@ -129,8 +139,8 @@
     }
 
     if (move.type === 'toggleHold') {
-      if (s.rollsTaken === 0) throw new Error('must roll before holding');
-      if (s.rollsTaken >= MAX_ROLLS_PER_TURN) throw new Error('cannot toggle after last roll');
+      if (s.rollsTaken === 0) throw new Error('must roll before marking');
+      if (s.rollsTaken >= MAX_ROLLS_PER_TURN) throw new Error('cannot mark after last roll');
       if (!Number.isInteger(move.dieIndex) || move.dieIndex < 0 || move.dieIndex >= DICE_COUNT) {
         throw new Error('invalid dieIndex');
       }
@@ -173,15 +183,22 @@
       };
 
       const totalCells = totalCellsPerPlayer(s);
-      if (playerCellsFilled(s, pIdx) === totalCells) {
+      const playerJustFinished = playerCellsFilled(s, pIdx) === totalCells;
+      if (playerJustFinished) {
         s.playerFinishedAt[pIdx] = s.turnNumber;
-        s.gameOver = true;
-        const w = computeWinner(s);
-        s.winner = w;
-        return s;
+        // First player to finish triggers the final round.
+        if (s.firstFinisherIndex === null) {
+          s.firstFinisherIndex = pIdx;
+          s.finalRoundRemaining = [];
+          for (let i = 0; i < s.players.length; i++) {
+            if (i !== pIdx) s.finalRoundRemaining.push(i);
+          }
+        }
       }
 
-      if (wasYatzy) {
+      // Yatzy grants an extra turn — but only if the player still has empty cells to score in.
+      const hasEmptyCells = playerCellsFilled(s, pIdx) < totalCells;
+      if (wasYatzy && hasEmptyCells) {
         s.dice = [0, 0, 0, 0, 0];
         s.holds = [false, false, false, false, false];
         s.rollsTaken = 0;
@@ -190,7 +207,28 @@
         return s;
       }
 
+      // Non-Yatzy advance (or Yatzy but player just finished): close out this player's turn-sequence.
+      if (s.finalRoundRemaining) {
+        const idx = s.finalRoundRemaining.indexOf(pIdx);
+        if (idx >= 0) s.finalRoundRemaining.splice(idx, 1);
+        if (s.finalRoundRemaining.length === 0) {
+          s.gameOver = true;
+          s.winner = computeWinner(s);
+          return s;
+        }
+      }
+
+      // Find the next player. Skip players who have finished (no empty cells left).
       let next = (pIdx + 1) % s.players.length;
+      while (s.playerFinishedAt[next] !== null && next !== pIdx) {
+        next = (next + 1) % s.players.length;
+      }
+      if (next === pIdx) {
+        // Wrapped back to self (everyone else finished). Game must be over.
+        s.gameOver = true;
+        s.winner = computeWinner(s);
+        return s;
+      }
       s.currentPlayerIndex = next;
       s.dice = [0, 0, 0, 0, 0];
       s.holds = [false, false, false, false, false];

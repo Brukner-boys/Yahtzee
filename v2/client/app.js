@@ -18,7 +18,30 @@
     boardView: null,
     diceView: null,
     statusEl: null,
+    lastShownYatzySeq: 0,
   };
+
+  function showYatzyEffect(extraTurn) {
+    document.querySelectorAll('.yatzy-flash').forEach((n) => n.remove());
+    const overlay = document.createElement('div');
+    overlay.className = 'yatzy-flash';
+    const inner = document.createElement('div');
+    inner.className = 'yatzy-flash__inner';
+    inner.textContent = extraTurn ? i18n.t('board.yatzyPopExtra') : i18n.t('board.yatzyPop');
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 1700);
+  }
+
+  function maybeShowYatzy() {
+    const game = app.roomData && app.roomData.game;
+    if (!game || !game.lastEvent) return;
+    if (game.eventSeq <= app.lastShownYatzySeq) return;
+    if (game.lastEvent.type === 'scored' && game.lastEvent.wasYatzy) {
+      app.lastShownYatzySeq = game.eventSeq;
+      showYatzyEffect(!!game.lastEvent.extraTurn);
+    }
+  }
 
   function initLang() {
     const saved = session.getLang();
@@ -32,8 +55,34 @@
       session.setLang(next);
       applyDir();
       btn.textContent = i18n.t('lang.toggle');
+      refreshExitButton();
       rebuildCurrentScreen();
     });
+    refreshExitButton();
+    const exitBtn = document.getElementById('exit-to-menu');
+    if (exitBtn) exitBtn.addEventListener('click', exitToMenu);
+  }
+
+  function refreshExitButton() {
+    const btn = document.getElementById('exit-to-menu');
+    if (!btn) return;
+    const labelEl = btn.querySelector('[data-exit-label]');
+    if (labelEl) labelEl.textContent = i18n.t('topbar.menu');
+    btn.setAttribute('aria-label', i18n.t('topbar.menu'));
+  }
+
+  function exitToMenu() {
+    if (!confirm(i18n.t('topbar.confirmExit'))) return;
+    // Tell the server we're leaving so this socket can immediately participate
+    // in a fresh room/game. The server replies with {type:'left'} which clears
+    // local state and navigates to lobby.
+    if (app.socket) app.socket.send({ type: 'leave' });
+    session.clearToken();
+    app.roomData = null;
+    app.token = null;
+    app.you = null;
+    app.lastShownYatzySeq = 0;
+    navigateTo('lobby');
   }
 
   function applyDir() {
@@ -121,6 +170,10 @@
     document.querySelectorAll('[data-screen]').forEach((el) => {
       el.hidden = el.dataset.screen !== screen;
     });
+    // Topbar exit is only useful when actively in a room/game, not while in the lobby
+    // (already at the entry point) or after game-end (the end card has its own button).
+    const exitBtn = document.getElementById('exit-to-menu');
+    if (exitBtn) exitBtn.hidden = !(screen === 'room' || screen === 'board');
     rebuildCurrentScreen();
   }
 
@@ -214,6 +267,8 @@
 
     app.boardView = Y.ui.board.createBoard({
       container: tableWrap,
+      // v2: the viewer is `app.you`; the board uses this to gate cell click affordance.
+      getViewerIndex: () => app.you,
       onSelectCell: (columnIndex, categoryId) => {
         if (!isMyTurn()) { toast(i18n.t('errors.notYourTurn'), true); return; }
         app.socket.send({ type: 'intent', action: 'selectCell', payload: { columnIndex, categoryId } });
@@ -238,6 +293,10 @@
     const isMyTurn = opts.isMyTurn;
     root.innerHTML = '';
     root.className = 'dice-tray';
+
+    const label = document.createElement('div');
+    label.className = 'dice-tray__label';
+    root.appendChild(label);
 
     const row = document.createElement('div');
     row.className = 'dice-row';
@@ -264,8 +323,9 @@
       if (rollBtn.disabled) return;
       if (!isMyTurn()) return;
       const state = opts.getState();
+      // Animate dice marked for re-roll (holds[i] === false) — or all 5 on the very first roll.
       for (let i = 0; i < 5; i++) {
-        if (!state.holds[i]) {
+        if (state.rollsTaken === 0 || !state.holds[i]) {
           dieButtons[i].classList.remove('die--rolling');
           void dieButtons[i].offsetWidth;
           dieButtons[i].classList.add('die--rolling');
@@ -281,14 +341,21 @@
     function render(state) {
       const hasDice = state.rollsTaken > 0;
       const mine = isMyTurn();
+      const canMark = mine && hasDice && state.rollsTaken < stateLib.MAX_ROLLS_PER_TURN;
+
+      label.hidden = !canMark;
+      if (canMark) label.textContent = i18n.t('board.markToRerollHint');
+
       for (let i = 0; i < 5; i++) {
         const btn = dieButtons[i];
         const face = btn.firstChild;
         const value = state.dice[i];
         face.textContent = hasDice && value > 0 ? String(value) : '·';
-        btn.classList.toggle('die--held', !!state.holds[i]);
-        btn.setAttribute('aria-pressed', state.holds[i] ? 'true' : 'false');
-        btn.disabled = !mine || !(hasDice && state.rollsTaken < stateLib.MAX_ROLLS_PER_TURN);
+        // INVERTED: holds[i] === false means "marked for re-roll" (the active selection).
+        const markedForReroll = hasDice && !state.holds[i];
+        btn.classList.toggle('die--reroll', markedForReroll);
+        btn.setAttribute('aria-pressed', markedForReroll ? 'true' : 'false');
+        btn.disabled = !canMark;
       }
       rollBtn.disabled = !mine || state.rollsTaken >= stateLib.MAX_ROLLS_PER_TURN || state.gameOver;
       rollBtn.textContent = state.rollsTaken === 0 ? i18n.t('board.roll') : i18n.t('board.rollAgain');
@@ -304,6 +371,7 @@
 
   function refreshBoard() {
     if (!app.roomData || !app.roomData.game) return;
+    maybeShowYatzy();
     if (app.roomData.game.gameOver) {
       navigateTo('end');
       return;
@@ -311,28 +379,51 @@
     updateBoardStatus();
     app.boardView.render(app.roomData.game);
     app.diceView.render(app.roomData.game);
+    // Highlight dice tray when it's the viewer's turn
+    const tray = document.querySelector('#screen-board .dice-tray');
+    if (tray) tray.classList.toggle('dice-tray--active', isMyTurn());
   }
 
   function updateBoardStatus() {
     const statusEl = app.statusEl;
     if (!statusEl) return;
     const game = app.roomData.game;
+    const mine = isMyTurn();
     statusEl.innerHTML = '';
+    statusEl.classList.toggle('board-status--my-turn', mine);
 
     const turn = document.createElement('div');
-    turn.className = 'board-status__turn';
+    turn.className = 'board-status__turn' + (mine ? ' board-status__turn--mine' : '');
     const cur = game.players[game.currentPlayerIndex];
-    const turnSpan = document.createElement('span');
-    turnSpan.textContent = i18n.t('board.turn', { name: cur.name });
-    turn.appendChild(turnSpan);
+    const prefix = document.createElement('span');
+    prefix.textContent = mine ? i18n.t('board.yourTurn') : i18n.t('board.waitingForLabel');
+    turn.appendChild(prefix);
+    const badge = document.createElement('span');
+    badge.className = 'board-status__player-badge board-status__player-badge--' +
+      (cur.color || 'p' + game.currentPlayerIndex);
+    badge.textContent = cur.name;
+    turn.appendChild(badge);
     statusEl.appendChild(turn);
 
     const rolls = document.createElement('div');
     rolls.className = 'board-status__rolls';
-    rolls.textContent = i18n.t('board.rollsLeft', {
-      n: stateLib.MAX_ROLLS_PER_TURN - game.rollsTaken,
-    });
+    const rt = game.rollsTaken;
+    if (rt === 0) {
+      rolls.textContent = i18n.t('board.readyToRoll');
+    } else if (rt >= stateLib.MAX_ROLLS_PER_TURN) {
+      rolls.textContent = i18n.t('board.rollOfThreeDone');
+      rolls.classList.add('board-status__rolls--done');
+    } else {
+      rolls.textContent = i18n.t('board.rollOfThree', { n: rt });
+    }
     statusEl.appendChild(rolls);
+
+    if (game.finalRoundRemaining !== null) {
+      const fr = document.createElement('div');
+      fr.className = 'board-status__final';
+      fr.textContent = i18n.t('board.finalRound');
+      statusEl.appendChild(fr);
+    }
 
     if (game.lastEvent && game.lastEvent.extraTurn) {
       const extra = document.createElement('div');
@@ -341,15 +432,15 @@
       extra.style.fontWeight = '700';
       extra.textContent = i18n.t('board.extraTurn');
       statusEl.appendChild(extra);
-    } else if (isMyTurn()) {
+    } else if (mine && rt > 0) {
       const hint = document.createElement('div');
       hint.className = 'board-status__hint';
       hint.textContent = i18n.t('board.selectCellHint');
       statusEl.appendChild(hint);
-    } else {
+    } else if (!mine) {
       const hint = document.createElement('div');
       hint.className = 'board-status__hint';
-      hint.textContent = i18n.t('room.waiting');
+      hint.textContent = i18n.t('board.spectatorHint');
       statusEl.appendChild(hint);
     }
   }
@@ -427,10 +518,15 @@
     newBtn.className = 'btn btn--primary';
     newBtn.textContent = i18n.t('end.newGame');
     newBtn.addEventListener('click', () => {
+      // CRITICAL: tell the server we're leaving the (ended) room so this socket
+      // can immediately create a new room. Without this, the server still considers
+      // the socket "in" the room and rejects createRoom with BAD_STATE.
+      app.socket.send({ type: 'leave' });
       session.clearToken();
       app.roomData = null;
       app.token = null;
       app.you = null;
+      app.lastShownYatzySeq = 0;
       navigateTo('lobby');
     });
     actions.appendChild(newBtn);

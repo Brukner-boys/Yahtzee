@@ -25,9 +25,9 @@ test('t returns translated string', () => {
 
 test('t interpolates {n} params', () => {
   i18n.setLang('he');
-  assert.strictEqual(i18n.t('board.rollsLeft', { n: 2 }), 'גלגולים: 2/3');
+  assert.strictEqual(i18n.t('board.rollOfThree', { n: 2 }), 'הטלה 2 מתוך 3');
   i18n.setLang('en');
-  assert.strictEqual(i18n.t('board.rollsLeft', { n: 2 }), 'Rolls: 2/3');
+  assert.strictEqual(i18n.t('board.rollOfThree', { n: 2 }), 'Roll 2 of 3');
   i18n.setLang('he');
 });
 

@@ -16,7 +16,30 @@
     boardView: null,
     diceView: null,
     menuView: null,
+    lastShownYatzySeq: 0,
   };
+
+  function showYatzyEffect(extraTurn) {
+    // Remove any pre-existing flash so a back-to-back Yatzy can re-trigger.
+    document.querySelectorAll('.yatzy-flash').forEach((n) => n.remove());
+    const overlay = document.createElement('div');
+    overlay.className = 'yatzy-flash';
+    const inner = document.createElement('div');
+    inner.className = 'yatzy-flash__inner';
+    inner.textContent = extraTurn ? i18n.t('board.yatzyPopExtra') : i18n.t('board.yatzyPop');
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 1700);
+  }
+
+  function maybeShowYatzy() {
+    if (!app.game || !app.game.lastEvent) return;
+    if (app.game.eventSeq <= app.lastShownYatzySeq) return;
+    if (app.game.lastEvent.type === 'scored' && app.game.lastEvent.wasYatzy) {
+      app.lastShownYatzySeq = app.game.eventSeq;
+      showYatzyEffect(!!app.game.lastEvent.extraTurn);
+    }
+  }
 
   function initLang() {
     const saved = persist.loadLang();
@@ -25,6 +48,22 @@
     const btn = document.getElementById('lang-toggle');
     btn.textContent = i18n.t('lang.toggle');
     btn.addEventListener('click', toggleLang);
+    refreshExitButton();
+  }
+
+  function refreshExitButton() {
+    const btn = document.getElementById('exit-to-menu');
+    if (!btn) return;
+    const labelEl = btn.querySelector('[data-exit-label]');
+    if (labelEl) labelEl.textContent = i18n.t('topbar.menu');
+    btn.setAttribute('aria-label', i18n.t('topbar.menu'));
+  }
+
+  function exitToMenu() {
+    if (!confirm(i18n.t('topbar.confirmExit'))) return;
+    persist.clearGame();
+    app.game = null;
+    showScreen('menu');
   }
 
   function applyDir() {
@@ -39,6 +78,7 @@
     persist.saveLang(next);
     applyDir();
     document.getElementById('lang-toggle').textContent = i18n.t('lang.toggle');
+    refreshExitButton();
     renderCurrentScreen();
   }
 
@@ -47,6 +87,8 @@
     document.querySelectorAll('[data-screen]').forEach((el) => {
       el.hidden = el.dataset.screen !== app.screen;
     });
+    const exitBtn = document.getElementById('exit-to-menu');
+    if (exitBtn) exitBtn.hidden = app.screen !== 'board';
     if (app.screen === 'menu') renderMenu();
     else if (app.screen === 'board') renderBoard();
     else if (app.screen === 'end') renderEnd();
@@ -129,6 +171,8 @@
     app.diceView = ui.dice.createDiceTray({
       container: diceEl,
       getState: () => app.game,
+      // In v1 hot-seat the viewer is whoever is at the device, which IS the current player.
+      getViewerCanAct: () => !app.game.gameOver,
       onRoll: (dice) => applyMoveAndRefresh({ type: 'roll', dice }),
       onToggleHold: (i) => applyMoveAndRefresh({ type: 'toggleHold', dieIndex: i }),
     });
@@ -138,6 +182,7 @@
 
   function refreshBoard() {
     if (!app.game) return;
+    maybeShowYatzy();
     if (app.game.gameOver) {
       persist.saveGame(app.game);
       showScreen('end');
@@ -146,27 +191,48 @@
     updateBoardStatus();
     app.boardView.render(app.game);
     app.diceView.render(app.game);
+    // Reflect "active dice tray" with a frame
+    const tray = document.querySelector('#screen-board .dice-tray');
+    if (tray) tray.classList.toggle('dice-tray--active', !app.game.gameOver);
   }
 
   function updateBoardStatus() {
     const statusEl = document.querySelector('#screen-board .board-status');
     if (!statusEl) return;
     statusEl.innerHTML = '';
+    // In v1 hot-seat the viewer is always whoever's turn it is.
+    statusEl.classList.add('board-status--my-turn');
 
     const turn = document.createElement('div');
-    turn.className = 'board-status__turn';
+    turn.className = 'board-status__turn board-status__turn--mine';
     const cur = app.game.players[app.game.currentPlayerIndex];
-    const turnSpan = document.createElement('span');
-    turnSpan.textContent = i18n.t('board.turn', { name: cur.name });
-    turn.appendChild(turnSpan);
+    const badge = document.createElement('span');
+    badge.className = 'board-status__player-badge board-status__player-badge--' +
+      (cur.color || 'p' + app.game.currentPlayerIndex);
+    badge.textContent = cur.name;
+    turn.appendChild(badge);
     statusEl.appendChild(turn);
 
+    // Rolls counter (ascending)
     const rolls = document.createElement('div');
     rolls.className = 'board-status__rolls';
-    rolls.textContent = i18n.t('board.rollsLeft', {
-      n: state.MAX_ROLLS_PER_TURN - app.game.rollsTaken,
-    });
+    const rt = app.game.rollsTaken;
+    if (rt === 0) {
+      rolls.textContent = i18n.t('board.readyToRoll');
+    } else if (rt >= state.MAX_ROLLS_PER_TURN) {
+      rolls.textContent = i18n.t('board.rollOfThreeDone');
+      rolls.classList.add('board-status__rolls--done');
+    } else {
+      rolls.textContent = i18n.t('board.rollOfThree', { n: rt });
+    }
     statusEl.appendChild(rolls);
+
+    if (app.game.finalRoundRemaining !== null) {
+      const fr = document.createElement('div');
+      fr.className = 'board-status__final';
+      fr.textContent = i18n.t('board.finalRound');
+      statusEl.appendChild(fr);
+    }
 
     if (app.game.lastEvent && app.game.lastEvent.extraTurn) {
       const extra = document.createElement('div');
@@ -175,26 +241,15 @@
       extra.style.fontWeight = '700';
       extra.textContent = i18n.t('board.extraTurn');
       statusEl.appendChild(extra);
-    } else {
+    } else if (rt > 0) {
       const hint = document.createElement('div');
       hint.className = 'board-status__hint';
       hint.textContent = i18n.t('board.selectCellHint');
       statusEl.appendChild(hint);
     }
 
-    const newBtn = document.createElement('button');
-    newBtn.type = 'button';
-    newBtn.className = 'btn btn--ghost';
-    newBtn.style.marginTop = '12px';
-    newBtn.textContent = i18n.t('menu.newGame');
-    newBtn.addEventListener('click', () => {
-      if (confirm(i18n.t('menu.confirmNewGame'))) {
-        persist.clearGame();
-        app.game = null;
-        showScreen('menu');
-      }
-    });
-    statusEl.appendChild(newBtn);
+    // No "New Game" button here — it lives in the topbar (#exit-to-menu) to keep
+    // the in-game status area focused on the turn instructions only.
   }
 
   function applyMoveAndRefresh(move) {
@@ -309,6 +364,8 @@
 
   function boot() {
     initLang();
+    const exitBtn = document.getElementById('exit-to-menu');
+    if (exitBtn) exitBtn.addEventListener('click', exitToMenu);
     // Auto-resume into board/end if a saved game exists
     const saved = persist.loadGame();
     if (saved) {

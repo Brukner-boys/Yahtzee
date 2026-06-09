@@ -21,6 +21,9 @@
   function createBoard(opts) {
     const root = opts.container;
     const onSelectCell = opts.onSelectCell;
+    // Optional callback: returns the index of the viewing player (used by v2 client).
+    // If undefined, viewer is assumed to be the current player (v1 hot-seat).
+    const getViewerIndex = opts.getViewerIndex || (() => null);
     root.innerHTML = '';
     root.className = 'board-table-wrap';
 
@@ -152,6 +155,14 @@
 
       const cur = state.currentPlayerIndex;
       const canScore = state.rollsTaken > 0 && !state.gameOver;
+      const viewer = getViewerIndex();
+      const viewerIsCurrent = viewer === null || viewer === cur;
+
+      // Highlight the current player's column headers
+      const playerHeads = thead.querySelectorAll('.player-head');
+      playerHeads.forEach((h, i) => {
+        h.classList.toggle('player-head--active', i === cur && !state.gameOver);
+      });
 
       for (let p = 0; p < state.players.length; p++) {
         for (let c = 0; c < state.columnCount; c++) {
@@ -160,15 +171,20 @@
             const td = cellMap[p + ':' + c + ':' + catId];
             if (!td) continue;
             const val = col[catId];
-            td.classList.remove('cell--available', 'cell--preview', 'cell--current');
+            td.classList.remove('cell--available', 'cell--readonly', 'cell--current');
             td.dataset.clickable = '0';
             if (val !== null) {
               td.textContent = format.num(val);
             } else if (canScore && p === cur) {
               const preview = scoring.categoryScore(catId, state.dice);
               td.textContent = format.num(preview);
-              td.classList.add('cell--available');
-              td.dataset.clickable = '1';
+              if (viewerIsCurrent) {
+                td.classList.add('cell--available');
+                td.dataset.clickable = '1';
+              } else {
+                // Spectator view: show preview value muted, not interactive.
+                td.classList.add('cell--readonly');
+              }
             } else {
               td.textContent = '—';
             }

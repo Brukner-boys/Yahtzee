@@ -83,6 +83,26 @@ input, select { font: inherit; color: inherit; }
 }
 .lang-toggle:hover { background: var(--surface-3); }
 
+/* Topbar exit button — intentionally low-key so it isn't confused with
+   active gameplay buttons (which sit further down in board-status / dice-tray). */
+.btn-topbar {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-topbar:hover { background: var(--surface-2); color: var(--text); }
+.btn-topbar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .btn-topbar { padding: 5px 8px; font-size: 0.78rem; }
+}
+
 .preview-nav {
   display: flex;
   gap: 4px;
@@ -194,15 +214,25 @@ input, select { font: inherit; color: inherit; }
   font-weight: 500;
   transition: background 0.15s, transform 0.05s;
 }
-.btn:hover { background: var(--surface-3); }
-.btn:active { transform: scale(0.97); }
+.btn:hover:not(:disabled) { background: var(--surface-3); }
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(0.6);
+}
 .btn--primary {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: #0b1220;
   font-weight: 700;
 }
-.btn--primary:hover { background: var(--accent); }
+.btn--primary:hover:not(:disabled) { background: var(--accent); }
+.btn--primary:disabled {
+  background: var(--surface-3);
+  border-color: var(--border);
+  color: var(--text-dim);
+}
 .btn--ghost {
   background: transparent;
 }
@@ -234,19 +264,98 @@ input, select { font: inherit; color: inherit; }
   flex-direction: column;
   gap: 10px;
   height: fit-content;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.board-status--my-turn {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
 }
 .board-status__turn {
   font-size: 1.1rem;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
+.board-status__turn--mine {
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+.board-status__player-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--surface-3);
+}
+.board-status__player-badge--p0 { background: var(--p0); color: #1a0a00; }
+.board-status__player-badge--p1 { background: var(--p1); color: #021024; }
+.board-status__player-badge--p2 { background: var(--p2); color: #1a0036; }
+.board-status__player-badge--p3 { background: var(--p3); color: #00200a; }
+.board-status__player-badge--p4 { background: var(--p4); color: #2a0816; }
+.board-status__player-badge--p5 { background: var(--p5); color: #2a1e00; }
 .board-status__rolls {
-  color: var(--text-dim);
-  font-size: 0.95rem;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.board-status__rolls--done {
+  color: var(--warn);
 }
 .board-status__hint {
   color: var(--text-dim);
   font-size: 0.85rem;
   margin-top: 4px;
+}
+.board-status__final {
+  color: var(--warn);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 4px 10px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+/* ============================== YATZY FLASH ============================== */
+.yatzy-flash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: none;
+  background: rgba(0,0,0,0);
+  animation: yatzyFlashBg 1.6s ease-out forwards;
+}
+.yatzy-flash__inner {
+  background: linear-gradient(135deg, #fde047 0%, #f97316 60%, #ef4444 100%);
+  color: #0b1220;
+  padding: 22px 44px;
+  border-radius: 22px;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-align: center;
+  box-shadow: 0 14px 50px rgba(249, 115, 22, 0.55);
+  animation: yatzyPop 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  border: 4px solid rgba(255, 255, 255, 0.5);
+}
+@keyframes yatzyFlashBg {
+  0%   { background: rgba(0,0,0,0); }
+  20%  { background: rgba(251, 191, 36, 0.18); }
+  100% { background: rgba(0,0,0,0); }
+}
+@keyframes yatzyPop {
+  0%   { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+  25%  { transform: scale(1.15) rotate(4deg); opacity: 1; }
+  45%  { transform: scale(1) rotate(0deg); }
+  85%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.4) translateY(-30px); opacity: 0; }
 }
 
 /* ============================== SCORE TABLE ============================== */
@@ -315,6 +424,20 @@ input, select { font: inherit; color: inherit; }
 .cell--available:hover {
   background: rgba(56, 189, 248, 0.2);
 }
+/* For v2 spectators: preview shown but not clickable */
+.cell--readonly {
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-dim);
+  font-style: italic;
+  cursor: not-allowed;
+}
+/* Active player column header */
+.player-head--active {
+  background: var(--accent-strong) !important;
+  color: #0b1220 !important;
+  font-weight: 800 !important;
+  box-shadow: inset 0 -3px 0 var(--warn);
+}
 .cell--summary {
   color: var(--good);
   font-weight: 600;
@@ -352,6 +475,15 @@ input, select { font: inherit; color: inherit; }
   gap: 14px;
   align-items: center;
 }
+.dice-tray--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+.dice-tray__label {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
 .dice-row {
   display: flex;
   gap: 10px;
@@ -374,13 +506,36 @@ input, select { font: inherit; color: inherit; }
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
   transition: transform 0.1s, background 0.15s, border-color 0.15s;
 }
-.die:hover { transform: translateY(-2px); }
-.die:active { transform: translateY(1px); box-shadow: none; }
-.die--held {
-  background: #fde68a;
-  border-color: var(--warn);
-  transform: translateY(2px);
-  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.4);
+.die:hover:not(:disabled) { transform: translateY(-2px); }
+.die:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.die:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+/* INVERTED: a die "marked for reroll" stands out (it's the active selection). */
+.die--reroll {
+  background: linear-gradient(135deg, #fca5a5 0%, #f87171 100%);
+  border-color: var(--danger);
+  color: #450a0a;
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.45);
+}
+.die--reroll::after {
+  content: '↻';
+  position: absolute;
+  top: -8px;
+  inset-inline-end: -8px;
+  background: var(--danger);
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
 }
 .die--rolling { animation: roll 0.5s ease-in-out; }
 @keyframes roll {
